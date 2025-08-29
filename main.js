@@ -55,7 +55,31 @@ app.get('/list-groups', async (req, res) => {
 });
 
 app.get('/send-group', async (req, res) => {
-    const { groupName, message } = req.query;
+    const { groupName, message,contact } = req.query;
+
+    if (!groupName || !message) {
+        return res.status(400).send('Missing "groupName" or "message" or "contact"');
+    }
+
+    try {
+        const chats = await whatsapp.getChats();
+        const group = chats.find(chat => chat.isGroup && chat.name.toLowerCase() === groupName.toLowerCase());
+        
+        if (!group) {
+            return res.status(404).send('Group not found');
+        }
+
+        await whatsapp.sendMessage(group.id._serialized, message);
+        res.send(`✅ Message sent to group "${group.name}"`);
+
+    } catch (err) {
+        console.error(err);
+        res.status(500).send('Failed to send message to group');
+    }
+});
+
+app.get('/send-group-eform', async (req, res) => {
+    const { groupName, message, contact } = req.query;
 
     if (!groupName || !message) {
         return res.status(400).send('Missing "groupName" or "message"');
@@ -64,18 +88,42 @@ app.get('/send-group', async (req, res) => {
     try {
         const chats = await whatsapp.getChats();
         const group = chats.find(chat => chat.isGroup && chat.name.toLowerCase() === groupName.toLowerCase());
+        if (!group) return res.status(404).send('Group not found');
 
-        if (!group) {
-            return res.status(404).send('Group not found');
+        let mentions = [];
+
+        if (contact) {
+            const numbers = contact.split(',');
+            for (const number of numbers) {
+                const contactId = number.includes('@') ? number : `${number}@c.us`;
+                try {
+                    const contactObj = await whatsapp.getContactById(contactId);
+                    if (contactObj) mentions.push(contactObj);
+                } catch (e) {
+                    console.log(`Gagal ambil contact ${contactId}:`, e.message);
+                }
+            }
         }
 
-        await whatsapp.sendMessage(group.id._serialized, message);
-        res.send(`✅ Message sent to group "${group.name}"`);
+        await whatsapp.sendMessage(group.id._serialized, message, {
+            mentions: mentions
+        });
+
+        res.send({ status: 'sent', mentioned: mentions.map(m => m.id.user) });
+
     } catch (err) {
-        console.error(err);
+        console.error('Gagal kirim pesan:', err);
         res.status(500).send('Failed to send message to group');
     }
 });
+
+
+
+
+
+
+
+
 
 app.listen(PORT, () => {
     console.log(`🚀 Server running on http://localhost:${PORT}`);
