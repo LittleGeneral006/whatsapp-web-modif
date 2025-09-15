@@ -1,12 +1,26 @@
 const qrcode = require('qrcode-terminal');
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const express = require('express');
+// const jwt = require('jsonwebtoken');
 
 const whatsapp = new Client({
     authStrategy: new LocalAuth()
 });
 const app = express();
 const PORT = 3000;
+
+const rateLimit = require("express-rate-limit");
+
+const limiter = rateLimit({
+    windowMs: 60 * 1000, // 1 menit
+    max: 30, // max 30 request / menit
+    message: "Terlalu banyak request, coba lagi nanti"
+});
+
+const API_KEY = "rahmanulululululululululululululululu"; // Ganti dengan API key yang diinginkan
+
+
+app.use(limiter);
 
 // whatsapp
 whatsapp.on('qr', qr => {
@@ -79,10 +93,14 @@ app.get('/send-group', async (req, res) => {
 });
 
 app.get('/send-group-eform', async (req, res) => {
-    const { groupName, message, contact } = req.query;
+    const { groupName, message, contact,api_key } = req.query;
 
     if (!groupName || !message) {
         return res.status(400).send('Missing "groupName" or "message"');
+    }
+
+    if (api_key !== API_KEY) {
+        return res.status(403).json({ status: "error", message: "Unauthorized" });
     }
 
     try {
